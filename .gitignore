@@ -1,0 +1,45 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments (keep uv.lock committed for reproducible builds)
+.venv/
+venv/
+ENV/
+env/
+
+# Environment variables & local secrets (never commit real API keys)
+.env
+.env.*
+!.env.example
+
+# Testing, type-checking, and coverage caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Local database / vector storage volumes
+postgres_data/
+qdrant_data/
+qdrant_storage/
+*.db
+*.sqlite3
+
+# IDEs and OS metadata
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db

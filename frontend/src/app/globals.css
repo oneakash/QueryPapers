@@ -1,0 +1,22 @@
+@import "tailwindcss";
+
+@plugin "@tailwindcss/typography";
+
+@utility scrollbar-hide {
+  &::-webkit-scrollbar {
+    display: none;
+  }
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+@theme {
+  --color-slate-950: #020617;
+  --color-slate-50: #f8fafc;
+}
+
+body {
+  background-color: var(--color-slate-950);
+  color: var(--color-slate-50);
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+}

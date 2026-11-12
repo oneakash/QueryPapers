@@ -30,7 +30,7 @@ services:
       context: ./backend
     container_name: rag_backend
     env_file:
-      - ./backend/.env
+      - ./.env
     environment:
       POSTGRES_DSN: "postgresql://rag_user:rag_password@postgres:5432/rag_db"
       QDRANT_URL: "http://qdrant:6333"

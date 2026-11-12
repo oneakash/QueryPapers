@@ -41,7 +41,6 @@ Clone the repository and install dependencies using `uv`:
 ```bash
 git clone https://github.com/oneakash/QueryPapers.git
 cd QueryPapers
-uv sync
 ```
 
 Create your local environment variables file:

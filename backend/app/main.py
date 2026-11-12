@@ -1,10 +1,11 @@
-"""FastAPI application entrypoint, lifespan management, and deep health probe."""
+"""FastAPI application entrypoint, CORS middleware, lifespan, and health probe."""
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any, Literal
 
 from fastapi import FastAPI, Request, status
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
@@ -66,7 +67,6 @@ def create_app(
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         """Initialize and cleanly tear down live Postgres, Qdrant, and LLM clients."""
-        # If fakes were injected for unit/integration tests, skip live DB startup
         if vector_store is not None and llm is not None:
             yield
             return
@@ -145,6 +145,20 @@ def create_app(
                     await embed_client.close()
 
     app = FastAPI(title=cfg.app_name, lifespan=lifespan)
+
+    # Allow Next.js frontend to call FastAPI and send X-User-ID headers
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[
+            "http://localhost:3000",
+            "http://127.0.0.1:3000",
+        ],
+        allow_credentials=True,
+        allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+)(:\d+)?$",
+        allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+        allow_headers=["Content-Type", "X-User-ID", "Accept"],
+    )
+
     app.state.lock_manager = InMemoryThreadLockManager()
     app.state.health_probe = _default_health_check
 

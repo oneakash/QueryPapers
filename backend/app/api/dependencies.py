@@ -1,3 +1,5 @@
+from contextlib import AbstractAsyncContextManager
+
 """FastAPI dependency injection providers for auth, graph, and distributed locks."""
 
 import asyncio
@@ -13,7 +15,7 @@ from app.core.interfaces import VectorStoreProtocol
 class ThreadLockProtocol(Protocol):
     """Protocol for acquiring non-blocking per-thread locks."""
 
-    def try_lock(self, thread_id: str) -> AsyncIterator[bool]:
+    def try_lock(self, thread_id: str) -> AbstractAsyncContextManager[bool]:
         """Context manager yielding True if lock acquired, False if already locked."""
         ...
 

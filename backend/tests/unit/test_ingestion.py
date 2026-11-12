@@ -1,4 +1,4 @@
-"""Unit tests for Step 3: Ingestion pipeline, rollback, and Qdrant filter isolation."""
+"""Unit tests for Ingestion pipeline, rollback, and Qdrant filter isolation."""
 
 from typing import Any
 

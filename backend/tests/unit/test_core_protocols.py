@@ -1,4 +1,4 @@
-"""Unit tests for Step 2: Core Configuration and Dependency Inversion Protocols."""
+"""Unit tests for Core Configuration and Dependency Inversion Protocols."""
 
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage

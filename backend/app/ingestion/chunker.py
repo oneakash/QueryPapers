@@ -1,3 +1,5 @@
+import re
+
 """Deterministic text chunking utilities for document ingestion."""
 
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -14,7 +16,7 @@ def chunk_text(
     cleaned = text.strip()
     if not cleaned:
         raise InvalidDocumentError("Cannot chunk empty text.")
-
+    cleaned = re.sub(r"(?<!\n)\n(?!\n)", " ", cleaned)
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=chunk_size,
         chunk_overlap=chunk_overlap,

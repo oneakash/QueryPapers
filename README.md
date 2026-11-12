@@ -1,4 +1,4 @@
-# LangGraph HITL RAG API
+# QueryPapers
 
 A production-grade, stateful Human-in-the-Loop (HITL) Retrieval-Augmented Generation (RAG) system built with **FastAPI**, **LangGraph**, **Qdrant**, and **PostgreSQL**.
 
@@ -23,6 +23,11 @@ This system is designed around SOLID principles, featuring strict tenant isolati
 - **Package Management:** `uv`
 - **Linting & QA:** `black`, `isort`, `pycodestyle`, `mypy`, `pytest`
 
+### Frontend
+* **Framework:** Next.js 14+ (App Router)
+* **Styling:** Tailwind CSS v4, `@tailwindcss/typography`, Lucide Icons
+* **Features:** Server-Sent Events (SSE) streaming, local state management, React Markdown.
+
 ## ⚙️ Getting Started
 
 ### 1. Prerequisites
@@ -34,6 +39,8 @@ This system is designed around SOLID principles, featuring strict tenant isolati
 Clone the repository and install dependencies using `uv`:
 
 ```bash
+git clone https://github.com/oneakash/QueryPapers.git
+cd QueryPapers
 uv sync
 ```
 
@@ -42,27 +49,46 @@ Create your local environment variables file:
 ```bash
 cp .env.example .env
 ```
-*Edit `.env` to include your valid API keys (e.g., Google AI Studio Gemini key).*
+*Edit `.env` to include your valid API keys (e.g., a [Google AI Studio](https://aistudio.google.com/) Gemini key). To switch LLM providers later, just edit `.env` — no code changes needed.*
 
 ### 3. Start the Infrastructure
 Spin up the local PostgreSQL and Qdrant containers:
 
 ```bash
-docker compose up -d
+docker compose up -d backend postgres qdrant
+```
+### 4. Run the Frontend
+
+Run the Next.js development server locally;
+```bash
+cd frontend
+npm install
+npm run dev
+
 ```
 
-### 4. Run the API Server
+- Verify Qdrant is running by visiting the dashboard at http://localhost:6335/dashboard.
+
+- Navigate to http://localhost:3000 in your browser to start using the system.
+
+## 📖 Usage Workflow
+
+1. **Switch Tenant:** Enter a tenant ID (e.g., `akash_dev`) in the sidebar to isolate your vector space and long-term memory.
+2. **Knowledge Base:** Upload a `.pdf` or `.txt` file via the drag-and-drop zone. The backend instantly parses, chunks, and indexes it into Qdrant.
+3. **Query:** Ask the agent a question.
+4. **HITL Trigger:** If you ask an out-of-context question, the system will gracefully intercept it, show you the top 5 retrieved chunks, and wait for your manual approval or feedback instruction.
+---
+
+
+## 📖 API Usage Examples
+
+*Once the server is running, you can access the interactive Swagger documentation at `http://localhost:8000/docs`.*
+### Run the API Server
 Start the FastAPI application. The `lifespan` manager will automatically connect to Qdrant/Postgres and initialize the required collections and tables.
 
 ```bash
 uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
-
----
-
-## 📖 API Usage Examples
-
-Once the server is running, you can access the interactive Swagger documentation at `http://localhost:8000/docs`.
 
 ### 1. Upload a Document
 Ingest a PDF or TXT file scoped to a specific user.
@@ -107,6 +133,8 @@ curl -X POST http://localhost:8000/resume \
 This project enforces strict code quality and typing standards. Run the following commands to verify the codebase before opening a PR:
 
 ```bash
+cd backend
+
 # 1. Sort imports
 uv run isort app/ tests/
 

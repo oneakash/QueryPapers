@@ -1,12 +1,11 @@
-.PHONY: infra-up backend-dev frontend-dev backend-check sync-types
+.PHONY: backend-dev back-build frontend-dev backend-check sync-types
 
-# Start Postgres & Qdrant containers for local hybrid development
-infra-up:
-	docker compose up -d postgres qdrant
-
-# Run FastAPI with hot-reload inside backend/
+# Start Postgres & Qdrant containers for local hybrid development and Run FastAPI
 backend-dev:
-	cd backend && uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+	docker compose up -d backend postgres qdrant
+
+back-build:
+	docker compose up --build -d backend
 
 # Run strict PEP 8, Mypy, and Pytest checks inside backend/
 backend-check:

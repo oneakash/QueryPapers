@@ -99,8 +99,11 @@ async def test_xml_prompt_injection_is_escaped_before_llm() -> None:
 
     assert len(llm.last_prompt_chunks) == 1
     passed_chunk = llm.last_prompt_chunks[0]
-    assert passed_chunk.startswith("<context>")
+    assert passed_chunk.startswith('<context id="[1]" doc_id="doc_evil" chunk="0">')
     assert "&lt;/context&gt;" in passed_chunk
+    # The injected closing tag is escaped; only the real wrapper tag remains.
+    assert passed_chunk.count("</context>") == 1
+    assert passed_chunk.rstrip().endswith("</context>")
 
 
 @pytest.mark.asyncio

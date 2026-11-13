@@ -1,4 +1,4 @@
-"""RAG answer generation node with XML sanitization and LTM rule injection."""
+"""RAG answer generation node with XML sanitization, citations, and LTM rule."""
 
 import html
 from dataclasses import replace
@@ -19,10 +19,17 @@ REJECTED_BY_REVIEWER_FALLBACK = (
 )
 
 
-def sanitize_chunk_for_xml(chunk: ScoredChunk) -> ScoredChunk:
-    """Escape XML/HTML brackets in chunk content to prevent tag breakouts."""
+def sanitize_chunk_for_xml(chunk: ScoredChunk, index: int = 1) -> ScoredChunk:
+    """Escape XML/HTML brackets in chunk content and attach 1-based citation index."""
     safe_text = html.escape(chunk.content, quote=False)
-    return replace(chunk, content=f"<context>{safe_text}</context>")
+    doc_id = html.escape(str(getattr(chunk, "doc_id", "unknown")), quote=True)
+    chunk_idx = getattr(chunk, "chunk_index", 0)
+    return replace(
+        chunk,
+        content=f"""<context id="[{index}]" doc_id="{doc_id}" chunk="{chunk_idx}">
+            {safe_text}
+        </context>""",
+    )
 
 
 def make_generate_node(
@@ -59,8 +66,11 @@ def make_generate_node(
                 "messages": [AIMessage(content=msg)],
             }
 
-        # 3. Sanitize chunks against XML prompt injection
-        safe_chunks = [sanitize_chunk_for_xml(c) for c in chunks]
+        # 3. Sanitize chunks against XML prompt injection & number them [1], [2]...
+        safe_chunks = [
+            sanitize_chunk_for_xml(c, index=idx)
+            for idx, c in enumerate(chunks, start=1)
+        ]
 
         # 4. Load bounded tenant rules from Long-Term Memory Store
         user_rules: list[str] = []

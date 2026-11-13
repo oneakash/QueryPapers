@@ -91,6 +91,16 @@ class Settings(BaseSettings):
     )
     request_timeout_seconds: float = Field(default=20.0, gt=0.0)
 
+    # Ingestion behaviour
+    replace_on_filename_conflict: bool = Field(
+        default=False,
+        description=(
+            "When true, uploading a different file under an existing filename "
+            "replaces the old version. Byte-identical re-uploads are always "
+            "skipped regardless of this flag."
+        ),
+    )
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:

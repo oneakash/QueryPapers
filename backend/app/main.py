@@ -154,7 +154,10 @@ def create_app(
             "http://127.0.0.1:3000",
         ],
         allow_credentials=True,
-        allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+)(:\d+)?$",
+        allow_origin_regex=(
+            r"^https?://(localhost|127\.0\.0\.1"
+            r"|192\.168\.\d+\.\d+)(:\d+)?$"
+        ),
         allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
         allow_headers=["Content-Type", "X-User-ID", "Accept"],
     )

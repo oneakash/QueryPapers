@@ -78,7 +78,7 @@ class Settings(BaseSettings):
     # RAG & HITL Thresholds
     retrieval_top_k: int = Field(default=5, ge=1, le=20)
     hitl_confidence_threshold: float = Field(
-        default=0.75,
+        default=0.60,
         ge=0.0,
         le=1.0,
         description="Minimum top similarity score before triggering HITL interrupt.",

@@ -7,7 +7,7 @@ from typing import Protocol, runtime_checkable
 from qdrant_client import AsyncQdrantClient
 from qdrant_client.http import models as rest
 
-from app.core.interfaces import ScoredChunk
+from app.core.interfaces import ScoredChunk, StoredDocument
 
 
 @runtime_checkable
@@ -60,12 +60,40 @@ class QdrantVectorStore:
             )
         return rest.Filter(must=conditions)
 
+    @staticmethod
+    def build_document_lookup_filter(
+        user_id: str,
+        content_hash: str | None = None,
+        filename: str | None = None,
+    ) -> rest.Filter:
+        """Match one point (chunk 0) per document, always inside the tenant filter."""
+        conditions: list[rest.Condition] = [
+            QdrantVectorStore.build_tenant_filter(user_id=user_id),
+            rest.FieldCondition(key="chunk_index", match=rest.MatchValue(value=0)),
+        ]
+        if content_hash is not None:
+            conditions.append(
+                rest.FieldCondition(
+                    key="content_hash",
+                    match=rest.MatchValue(value=content_hash),
+                )
+            )
+        if filename is not None:
+            conditions.append(
+                rest.FieldCondition(
+                    key="filename",
+                    match=rest.MatchValue(value=filename),
+                )
+            )
+        return rest.Filter(must=conditions)
+
     async def upsert_chunks(
         self,
         user_id: str,
         doc_id: str,
         chunks: Sequence[str],
         filename: str = "",
+        content_hash: str = "",
     ) -> int:
         """Embed and upsert chunks with tenant and document metadata."""
         if not chunks:
@@ -85,6 +113,8 @@ class QdrantVectorStore:
                         "user_id": user_id,
                         "doc_id": doc_id,
                         "filename": filename,
+                        "content_hash": content_hash,
+                        "chunk_count": len(text_list),
                         "chunk_index": idx,
                         "content": chunk_text,
                     },
@@ -131,6 +161,37 @@ class QdrantVectorStore:
                 )
             )
         return results
+
+    async def find_documents(
+        self,
+        user_id: str,
+        *,
+        content_hash: str | None = None,
+        filename: str | None = None,
+    ) -> list[StoredDocument]:
+        """Return this user's documents matching the optional hash and filename."""
+        lookup_filter = self.build_document_lookup_filter(
+            user_id=user_id,
+            content_hash=content_hash,
+            filename=filename,
+        )
+        records, _ = await self._client.scroll(
+            collection_name=self._collection,
+            scroll_filter=lookup_filter,
+            limit=100,
+            with_payload=True,
+            with_vectors=False,
+        )
+        return [
+            StoredDocument(
+                doc_id=str(record.payload.get("doc_id", "")),
+                filename=str(record.payload.get("filename", "")),
+                content_hash=str(record.payload.get("content_hash", "")),
+                chunk_count=int(record.payload.get("chunk_count", 0)),
+            )
+            for record in records
+            if record.payload
+        ]
 
     async def delete_document(
         self,

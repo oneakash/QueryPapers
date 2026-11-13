@@ -34,12 +34,21 @@ async def _default_health_check() -> tuple[bool, bool]:
     return True, True
 
 
+_PAYLOAD_INDEXES: dict[str, rest.PayloadSchemaType] = {
+    "user_id": rest.PayloadSchemaType.KEYWORD,
+    "doc_id": rest.PayloadSchemaType.KEYWORD,
+    "content_hash": rest.PayloadSchemaType.KEYWORD,
+    "filename": rest.PayloadSchemaType.KEYWORD,
+    "chunk_index": rest.PayloadSchemaType.INTEGER,
+}
+
+
 async def _ensure_qdrant_collection(
     client: AsyncQdrantClient,
     collection_name: str,
     dimensions: int,
 ) -> None:
-    """Create the Qdrant collection and user_id payload index if missing."""
+    """Create the Qdrant collection and its payload indexes if missing."""
     exists = await client.collection_exists(collection_name)
     if not exists:
         await client.create_collection(
@@ -49,11 +58,12 @@ async def _ensure_qdrant_collection(
                 distance=rest.Distance.COSINE,
             ),
         )
-    await client.create_payload_index(
-        collection_name=collection_name,
-        field_name="user_id",
-        field_schema=rest.PayloadSchemaType.KEYWORD,
-    )
+    for field_name, field_schema in _PAYLOAD_INDEXES.items():
+        await client.create_payload_index(
+            collection_name=collection_name,
+            field_name=field_name,
+            field_schema=field_schema,
+        )
 
 
 def create_app(
@@ -155,8 +165,7 @@ def create_app(
         ],
         allow_credentials=True,
         allow_origin_regex=(
-            r"^https?://(localhost|127\.0\.0\.1"
-            r"|192\.168\.\d+\.\d+)(:\d+)?$"
+            r"^https?://(localhost|127\.0\.0\.1" r"|192\.168\.\d+\.\d+)(:\d+)?$"
         ),
         allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
         allow_headers=["Content-Type", "X-User-ID", "Accept"],

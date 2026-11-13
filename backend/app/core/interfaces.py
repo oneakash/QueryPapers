@@ -20,6 +20,16 @@ class ScoredChunk:
     chunk_index: int = 0
 
 
+@dataclass(frozen=True, slots=True)
+class StoredDocument:
+    """Document-level metadata recovered from a document's first chunk."""
+
+    doc_id: str
+    filename: str
+    content_hash: str
+    chunk_count: int
+
+
 @runtime_checkable
 class VectorStoreProtocol(Protocol):
     """Abstract contract for tenant-isolated vector storage operations."""
@@ -30,8 +40,19 @@ class VectorStoreProtocol(Protocol):
         doc_id: str,
         chunks: Sequence[str],
         filename: str = "",
+        content_hash: str = "",
     ) -> int:
         """Embed and upsert document chunks for a specific user and document."""
+        ...
+
+    async def find_documents(
+        self,
+        user_id: str,
+        *,
+        content_hash: str | None = None,
+        filename: str | None = None,
+    ) -> list[StoredDocument]:
+        """List this user's documents, optionally matching a hash and/or filename."""
         ...
 
     async def search(

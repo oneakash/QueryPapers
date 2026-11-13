@@ -76,6 +76,7 @@ npm run dev
 2. **Knowledge Base:** Upload a `.pdf` or `.txt` file via the drag-and-drop zone. The backend instantly parses, chunks, and indexes it into Qdrant.
 3. **Query:** Ask the agent a question.
 4. **HITL Trigger:** If you ask an out-of-context question, the system will gracefully intercept it, show you the top 5 retrieved chunks, and wait for your manual approval or feedback instruction.
+5. **New Conversation:** If the system rejecting your query which is actually relevant to your uploaded documents, switch to New Converstion and ask the query.
 ---
 
 

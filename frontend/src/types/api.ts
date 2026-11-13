@@ -12,12 +12,22 @@ export interface ChatRequest {
   stream?: boolean;
 }
 
+export interface Citation {
+  index: number;
+  doc_id: string;
+  filename: string;
+  chunk_index: number;
+  content: string;
+  score: number;
+}
+
 export interface ChatResponse {
   thread_id: string;
   status: ThreadStatus;
   answer: string | null;
   rewritten_query: string | null;
   top_retrieval_score: number;
+  citations?: Citation[];
   interrupt_payload: InterruptPreview | null;
 }
 

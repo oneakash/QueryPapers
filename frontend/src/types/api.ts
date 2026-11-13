@@ -37,10 +37,14 @@ export interface ResumeRequest {
   feedback?: string | null;
 }
 
+export type UploadStatus = "indexed" | "duplicate" | "replaced";
+
 export interface UploadResponse {
   doc_id: string;
   filename: string;
   chunks_indexed: number;
+  status: UploadStatus;
+  replaced_doc_ids?: string[];
 }
 
 export interface SSEStepEvent {

@@ -15,8 +15,32 @@ import {
 import { uploadDocument } from "@/api/client";
 import { HitlApprovalCard } from "@/components/chat/HitlApprovalCard";
 import { MessageBubble } from "@/components/chat/MessageBubble";
+import { Toast, ToastMessage } from "@/components/ui/Toast";
 import { useChatThread } from "@/hooks/useChatThread";
 import { UploadResponse } from "@/types/api";
+
+function describeUpload(res: UploadResponse): Omit<ToastMessage, "id"> {
+  switch (res.status) {
+    case "duplicate":
+      return {
+        kind: "info",
+        title: "Already in your knowledge base",
+        description: `"${res.filename}" was uploaded before, so nothing was re-indexed.`,
+      };
+    case "replaced":
+      return {
+        kind: "success",
+        title: "Document updated",
+        description: `Replaced the previous version of "${res.filename}" (${res.chunks_indexed} chunks).`,
+      };
+    default:
+      return {
+        kind: "success",
+        title: "Document indexed",
+        description: `"${res.filename}" added with ${res.chunks_indexed} chunks.`,
+      };
+  }
+}
 
 export default function HomePage() {
   const {
@@ -38,13 +62,21 @@ export default function HomePage() {
   const [uploadedDocs, setUploadedDocs] = useState<UploadResponse[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
-  
+  const [toast, setToast] = useState<ToastMessage | null>(null);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll to bottom when messages change or streaming starts
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isStreaming, interruptPayload]);
+
+  // Auto-dismiss the toast after a few seconds
+  useEffect(() => {
+    if (!toast) return;
+    const timer = setTimeout(() => setToast(null), 5000);
+    return () => clearTimeout(timer);
+  }, [toast]);
 
   const handleTenantSwitch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -61,7 +93,18 @@ export default function HomePage() {
     setUploadError(null);
     try {
       const res = await uploadDocument(userId, file);
-      setUploadedDocs((prev) => [res, ...prev]);
+      const replacedIds = res.replaced_doc_ids ?? [];
+      setUploadedDocs((prev) => {
+        // A duplicate that is already listed should not add a second row.
+        if (res.status === "duplicate" && prev.some((d) => d.doc_id === res.doc_id)) {
+          return prev;
+        }
+        const remaining = prev.filter(
+          (d) => d.doc_id !== res.doc_id && !replacedIds.includes(d.doc_id)
+        );
+        return [res, ...remaining];
+      });
+      setToast({ id: Date.now(), ...describeUpload(res) });
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : "Upload failed");
     } finally {
@@ -82,6 +125,8 @@ export default function HomePage() {
 
   return (
     <div className="flex h-screen w-full bg-[#020617] text-slate-100 font-sans overflow-hidden selection:bg-indigo-500/30">
+      <Toast toast={toast} onDismiss={() => setToast(null)} />
+
       {/* BACKGROUND GLOW EFFECTS */}
       <div className="pointer-events-none absolute -left-40 top-0 h-96 w-96 rounded-full bg-indigo-900/20 blur-[120px]" />
       <div className="pointer-events-none absolute -right-40 bottom-0 h-96 w-96 rounded-full bg-emerald-900/10 blur-[120px]" />

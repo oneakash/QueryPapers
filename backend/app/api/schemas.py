@@ -29,6 +29,15 @@ class InterruptPreview(BaseModel):
     chunks_preview: list[str]
 
 
+class Citation(BaseModel):
+    index: int
+    doc_id: str
+    filename: str
+    chunk_index: int
+    content: str
+    score: float
+
+
 class ChatResponse(BaseModel):
     """Unified response for both POST /chat and POST /resume."""
 
@@ -38,6 +47,7 @@ class ChatResponse(BaseModel):
     rewritten_query: str | None = None
     stream: bool = False
     top_retrieval_score: float = 0.0
+    citations: list[Citation] = Field(default_factory=list)
     interrupt_payload: InterruptPreview | None = None
 
 

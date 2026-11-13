@@ -1,6 +1,7 @@
 """Chat and HITL resume endpoints supporting both standard JSON and SSE streams."""
 
 import json
+import re
 from collections.abc import AsyncGenerator
 from typing import Annotated, Any
 
@@ -10,9 +11,52 @@ from langchain_core.messages import HumanMessage
 from langgraph.types import Command
 
 from app.api.dependencies import ThreadLockProtocol, get_lock_manager
-from app.api.schemas import ChatRequest, ChatResponse, InterruptPreview, ResumeRequest
+from app.api.schemas import (
+    ChatRequest,
+    ChatResponse,
+    Citation,
+    InterruptPreview,
+    ResumeRequest,
+)
+from app.core.interfaces import ScoredChunk
 
 router = APIRouter(tags=["chat"])
+
+_CITATION_PATTERN = re.compile(r"\[(\d+(?:\s*,\s*\d+)*)\]")
+
+
+def _extract_cited_indices(answer: str, max_index: int) -> list[int]:
+    """Return sorted 1-based chunk ids referenced as [N] or [N, M] in the answer."""
+    cited: set[int] = set()
+    for match in _CITATION_PATTERN.finditer(answer):
+        for part in match.group(1).split(","):
+            number = int(part)
+            if 1 <= number <= max_index:
+                cited.add(number)
+    return sorted(cited)
+
+
+def _build_citations(
+    answer: str | None,
+    chunks: list[ScoredChunk],
+) -> list[Citation]:
+    """Map [N] markers in the answer back to the chunks the generate node numbered."""
+    if not answer or not chunks:
+        return []
+    citations: list[Citation] = []
+    for number in _extract_cited_indices(answer, len(chunks)):
+        chunk = chunks[number - 1]
+        citations.append(
+            Citation(
+                index=number,
+                doc_id=chunk.doc_id,
+                filename=chunk.filename or chunk.doc_id,
+                chunk_index=chunk.chunk_index,
+                content=chunk.content,
+                score=round(float(chunk.score), 4),
+            )
+        )
+    return citations
 
 
 def _format_chat_response(
@@ -54,6 +98,8 @@ def _format_chat_response(
         )
         answer = None
 
+    citations = [] if is_paused else _build_citations(answer, retrieved_chunks)
+
     return ChatResponse(
         thread_id=thread_id,
         status="awaiting_approval" if is_paused else "completed",
@@ -61,6 +107,7 @@ def _format_chat_response(
         rewritten_query=state_values.get("rewritten_query")
         or state_values.get("original_query"),
         top_retrieval_score=top_score,
+        citations=citations,
         interrupt_payload=interrupt_payload,
     )
 

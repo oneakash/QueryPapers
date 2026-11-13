@@ -16,6 +16,8 @@ class ScoredChunk:
     user_id: str
     content: str
     score: float
+    filename: str = ""
+    chunk_index: int = 0
 
 
 @runtime_checkable
@@ -27,6 +29,7 @@ class VectorStoreProtocol(Protocol):
         user_id: str,
         doc_id: str,
         chunks: Sequence[str],
+        filename: str = "",
     ) -> int:
         """Embed and upsert document chunks for a specific user and document."""
         ...

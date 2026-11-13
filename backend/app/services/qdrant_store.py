@@ -65,6 +65,7 @@ class QdrantVectorStore:
         user_id: str,
         doc_id: str,
         chunks: Sequence[str],
+        filename: str = "",
     ) -> int:
         """Embed and upsert chunks with tenant and document metadata."""
         if not chunks:
@@ -83,6 +84,7 @@ class QdrantVectorStore:
                     payload={
                         "user_id": user_id,
                         "doc_id": doc_id,
+                        "filename": filename,
                         "chunk_index": idx,
                         "content": chunk_text,
                     },
@@ -124,6 +126,8 @@ class QdrantVectorStore:
                     user_id=str(payload.get("user_id", user_id)),
                     content=str(payload.get("content", "")),
                     score=float(point.score),
+                    filename=str(payload.get("filename", "")),
+                    chunk_index=int(payload.get("chunk_index", 0)),
                 )
             )
         return results

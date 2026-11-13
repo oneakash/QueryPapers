@@ -20,6 +20,7 @@ class FakeVectorStore:
         user_id: str,
         doc_id: str,
         chunks: Sequence[str],
+        filename: str = "",
     ) -> int:
         """Store chunks in memory or simulate mid-upload failure."""
         if self.fail_on_upsert:
@@ -32,6 +33,8 @@ class FakeVectorStore:
                         user_id=user_id,
                         content=chunks[0],
                         score=self.default_score,
+                        filename=filename,
+                        chunk_index=0,
                     )
                 )
             raise RuntimeError("Simulated Qdrant upsert failure.")
@@ -44,6 +47,8 @@ class FakeVectorStore:
                     user_id=user_id,
                     content=text,
                     score=self.default_score,
+                    filename=filename,
+                    chunk_index=idx,
                 )
             )
         return len(chunks)

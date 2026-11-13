@@ -47,6 +47,7 @@ async def ingest_document(
             user_id=user_id,
             doc_id=doc_id,
             chunks=chunks,
+            filename=filename,
         )
         return inserted_count
     except Exception as exc:

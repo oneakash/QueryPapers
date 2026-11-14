@@ -3,8 +3,8 @@
 from typing import Any
 
 from app.core.interfaces import VectorStoreProtocol
+from app.core.logging import extract_retrieve_fields, log_node_timing
 from app.graph.state import AgentState
-
 
 def make_retrieve_node(
     vector_store: VectorStoreProtocol,
@@ -12,6 +12,7 @@ def make_retrieve_node(
 ) -> Any:
     """Create the retrieve node bound to the injected VectorStoreProtocol."""
 
+    @log_node_timing("retrieve", extract_fields=extract_retrieve_fields)
     async def retrieve(state: AgentState) -> dict[str, Any]:
         """Retrieve top-k chunks for user_id and record highest similarity score."""
         user_id = state["user_id"]

@@ -101,6 +101,26 @@ class Settings(BaseSettings):
         ),
     )
 
+        # Logging
+    log_level: str = Field(
+        default="INFO",
+        description="Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL).",
+    )
+
+    # LangSmith Tracing (disabled by default)
+    langsmith_tracing: bool = Field(
+        default=False,
+        description="Enable LangSmith tracing for graph execution.",
+    )
+    langsmith_api_key: str = Field(
+        default="",
+        description="LangSmith API key for tracing. Required if tracing is enabled.",
+    )
+    langsmith_project: str = Field(
+        default="",
+        description="LangSmith project name for tracing.",
+    )
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:

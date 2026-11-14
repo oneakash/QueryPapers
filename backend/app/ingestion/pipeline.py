@@ -1,6 +1,7 @@
 """Asynchronous document ingestion pipeline with threadpool offloading and rollback."""
 
 import hashlib
+import logging
 import uuid
 from dataclasses import dataclass
 from typing import Literal
@@ -12,8 +13,9 @@ from app.core.interfaces import VectorStoreProtocol
 from app.ingestion.chunker import chunk_text
 from app.ingestion.parsers.pdf_parser import extract_text_from_pdf
 
-IngestStatus = Literal["indexed", "duplicate", "replaced"]
+logger = logging.getLogger(__name__)
 
+IngestStatus = Literal["indexed", "duplicate", "replaced"]
 
 @dataclass(frozen=True, slots=True)
 class IngestResult:
@@ -25,19 +27,15 @@ class IngestResult:
     status: IngestStatus
     replaced_doc_ids: tuple[str, ...] = ()
 
-
 _DOC_ID_NAMESPACE = uuid.uuid5(uuid.NAMESPACE_DNS, "querypapers.documents")
-
 
 def derive_doc_id(user_id: str, content_hash: str) -> str:
     """Return a stable per-tenant document ID: uuid5(user_id + content_hash)."""
     return str(uuid.uuid5(_DOC_ID_NAMESPACE, f"{user_id}:{content_hash}"))
 
-
 def compute_content_hash(file_bytes: bytes) -> str:
     """Return the SHA-256 hex digest that identifies a file's exact contents."""
     return hashlib.sha256(file_bytes).hexdigest()
-
 
 def _parse_and_chunk_sync(file_bytes: bytes, filename: str) -> list[str]:
     """Run CPU-bound parsing and splitting inside a worker thread."""
@@ -61,7 +59,6 @@ def _parse_and_chunk_sync(file_bytes: bytes, filename: str) -> list[str]:
         )
 
     return chunk_text(raw_text)
-
 
 async def ingest_document(
     file_bytes: bytes,
@@ -87,12 +84,18 @@ async def ingest_document(
         # Rollback any partially inserted chunks for this (user_id, doc_id)
         try:
             await vector_store.delete_document(user_id=user_id, doc_id=doc_id)
-        except Exception:
-            pass
+        except Exception as rollback_exc:
+            logger.warning(
+                "Rollback failed during ingest_document cleanup",
+                extra={
+                    "exception_type": type(rollback_exc).__name__,
+                    "user_id": user_id,
+                    "doc_id": doc_id,
+                },
+            )
         raise VectorStoreOperationError(
             f"Failed to index document '{doc_id}'; partial points rolled back."
         ) from exc
-
 
 async def ingest_document_idempotent(
     file_bytes: bytes,
@@ -146,8 +149,15 @@ async def ingest_document_idempotent(
         # Roll back the new version so a retry redoes the whole replacement.
         try:
             await vector_store.delete_document(user_id=user_id, doc_id=doc_id)
-        except Exception:
-            pass
+        except Exception as rollback_exc:
+            logger.warning(
+                "Rollback failed during ingest_document_idempotent cleanup",
+                extra={
+                    "exception_type": type(rollback_exc).__name__,
+                    "user_id": user_id,
+                    "doc_id": doc_id,
+                },
+            )
         raise VectorStoreOperationError(
             f"Indexed '{filename}' but could not remove its previous version."
         ) from exc

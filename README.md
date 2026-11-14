@@ -150,3 +150,18 @@ uv run mypy app/ tests/
 # 5. Run the test suite with coverage
 uv run pytest --cov=app --cov-report=term-missing -v
 ```
+
+---
+
+## 🔧 Observability
+
+### Structured Logging
+The application uses JSON-structured logging with request IDs for traceability. Every request receives a unique `X-Request-ID` header that appears in all log lines for that request.
+
+### Optional LangSmith Tracing
+LangSmith tracing is disabled by default. To enable it, set the following environment variables:
+
+```bash
+LANGSMITH_TRACING=true
+LANGSMITH_API_KEY=your_langsmith_api_key
+LANGSMITH_PROJECT=QueryPapers

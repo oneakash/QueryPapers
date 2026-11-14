@@ -18,11 +18,11 @@ from app.api.schemas import (
     InterruptPreview,
     ResumeRequest,
 )
-from app.core.interfaces import ScoredChunk
+from app.core.interfaces import ScoredChunk, Source
 
 router = APIRouter(tags=["chat"])
 
-_CITATION_PATTERN = re.compile(r"\[(\d+(?:\s*,\s*\d+)*)\]")
+_CITATION_PATTERN = re.compile(r"\[(\d+(?:\\s*,\\s*\\d+)*)\]")
 
 
 def _extract_cited_indices(answer: str, max_index: int) -> list[int]:
@@ -57,6 +57,18 @@ def _build_citations(
             )
         )
     return citations
+
+
+def _source_to_citation(source: Source) -> Citation:
+    """Convert a Source to a Citation for the API response."""
+    return Citation(
+        index=source.index,
+        doc_id=source.doc_id,
+        filename=source.filename or source.doc_id,
+        chunk_index=source.chunk_index,
+        content=source.content,
+        score=round(float(source.score), 4) if source.score is not None else 0.0,
+    )
 
 
 def _format_chat_response(
@@ -98,7 +110,12 @@ def _format_chat_response(
         )
         answer = None
 
-    citations = [] if is_paused else _build_citations(answer, retrieved_chunks)
+    # Build citations from state sources if available, otherwise from chunks
+    sources = state_values.get("sources", [])
+    if sources and not is_paused:
+        citations = [_source_to_citation(s) for s in sources]
+    else:
+        citations = [] if is_paused else _build_citations(answer, retrieved_chunks)
 
     return ChatResponse(
         thread_id=thread_id,

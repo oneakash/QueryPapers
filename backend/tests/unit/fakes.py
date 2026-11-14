@@ -1,10 +1,11 @@
 """In-memory fake implementations of core protocols for fast unit testing."""
 
 from collections.abc import Sequence
+from typing import Any
 
 from langchain_core.messages import BaseMessage
 
-from app.core.interfaces import ScoredChunk
+from app.core.interfaces import ScoredChunk, StoredDocument
 
 
 class FakeVectorStore:
@@ -21,6 +22,7 @@ class FakeVectorStore:
         doc_id: str,
         chunks: Sequence[str],
         filename: str = "",
+        content_hash: str = "",
     ) -> int:
         """Store chunks in memory or simulate mid-upload failure."""
         if self.fail_on_upsert:
@@ -35,6 +37,7 @@ class FakeVectorStore:
                         score=self.default_score,
                         filename=filename,
                         chunk_index=0,
+                        content_hash=content_hash,
                     )
                 )
             raise RuntimeError("Simulated Qdrant upsert failure.")
@@ -49,6 +52,7 @@ class FakeVectorStore:
                     score=self.default_score,
                     filename=filename,
                     chunk_index=idx,
+                    content_hash=content_hash,
                 )
             )
         return len(chunks)
@@ -74,6 +78,41 @@ class FakeVectorStore:
                 matches.append(chunk)
         return matches[:limit]
 
+    async def find_documents(
+        self,
+        user_id: str,
+        *,
+        content_hash: str | None = None,
+        filename: str | None = None,
+    ) -> list[StoredDocument]:
+        """Return documents matching the optional hash and filename."""
+        results: list[StoredDocument] = []
+        seen_doc_ids: set[str] = set()
+        for chunk in self._storage:
+            if chunk.user_id != user_id:
+                continue
+            if content_hash is not None and chunk.content_hash != content_hash:
+                continue
+            if filename is not None and chunk.filename != filename:
+                continue
+            if chunk.doc_id not in seen_doc_ids:
+                seen_doc_ids.add(chunk.doc_id)
+                # Count chunks for this doc_id
+                doc_chunks = [
+                    c
+                    for c in self._storage
+                    if c.user_id == user_id and c.doc_id == chunk.doc_id
+                ]
+                results.append(
+                    StoredDocument(
+                        doc_id=chunk.doc_id,
+                        filename=chunk.filename,
+                        content_hash=chunk.content_hash or "",
+                        chunk_count=len(doc_chunks),
+                    )
+                )
+        return results
+
     async def delete_document(
         self,
         user_id: str,
@@ -85,6 +124,37 @@ class FakeVectorStore:
             for chunk in self._storage
             if not (chunk.user_id == user_id and chunk.doc_id == doc_id)
         ]
+
+
+class OutOfOrderFakeStore:
+    """Fake store that returns items in reverse order (newest first) like Postgres."""
+
+    def __init__(self) -> None:
+        self._storage: dict[str, list[dict[str, Any]]] = {}
+
+    async def asearch(self, namespace: tuple[str, ...], limit: int = 10) -> list[Any]:
+        """Return items newest first (simulating Postgres behavior)."""
+        key = ":".join(namespace)
+        items = self._storage.get(key, [])
+        # Return newest first
+        return items[::-1][:limit]
+
+    async def aput(
+        self, namespace: tuple[str, ...], key: str, value: dict[str, Any]
+    ) -> None:
+        """Store value with created_at timestamp."""
+        key_str = ":".join(namespace)
+        if key_str not in self._storage:
+            self._storage[key_str] = []
+        self._storage[key_str].append({"key": key, "value": value})
+
+    async def adelete(self, namespace: tuple[str, ...], key: str) -> None:
+        """Delete item by key."""
+        key_str = ":".join(namespace)
+        if key_str in self._storage:
+            self._storage[key_str] = [
+                item for item in self._storage[key_str] if item["key"] != key
+            ]
 
 
 class FakeLLM:

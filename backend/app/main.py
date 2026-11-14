@@ -159,20 +159,21 @@ def create_app(
                     await embed_client.close()
 
     app = FastAPI(title=cfg.app_name, lifespan=lifespan)
-
+    
     # Allow Next.js frontend to call FastAPI and send X-User-ID headers
     app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-        "https://querypapers-frontend.onrender.com",  # Add your frontend URL
-        "https://*.onrender.com",  # Allow all Render frontends
-    ],
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type", "X-User-ID", "Accept"],
-)
+        CORSMiddleware,
+        allow_origins=[
+            "http://localhost:3000",
+            "http://127.0.0.1:3000",
+            "https://querypaperspro.vercel.app",  # ✅ ADD THIS
+            "https://*.vercel.app",              # ✅ Or use this for all Vercel
+            "https://*.onrender.com",           # ✅ Allow all Render frontends
+        ],
+        allow_credentials=True,
+        allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+        allow_headers=["Content-Type", "X-User-ID", "Accept"],
+    )
 
     app.state.lock_manager = InMemoryThreadLockManager()
     app.state.health_probe = _default_health_check

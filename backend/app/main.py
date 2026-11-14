@@ -73,6 +73,9 @@ def create_app(
 ) -> FastAPI:
     """Create and configure the FastAPI application instance."""
     cfg = settings or get_settings()
+    allowed_origins = [
+        origin.strip() for origin in cfg.cors_allow_origins.split(",") if origin.strip()
+    ]
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -85,6 +88,7 @@ def create_app(
         embed_client = create_embedding_client(cfg)
         qdrant_client = AsyncQdrantClient(
             url=cfg.qdrant_url,
+            api_key=cfg.qdrant_api_key,
             timeout=int(cfg.request_timeout_seconds),
         )
         await _ensure_qdrant_collection(
@@ -159,14 +163,9 @@ def create_app(
     # Allow Next.js frontend to call FastAPI and send X-User-ID headers
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=[
-            "http://localhost:3000",
-            "http://127.0.0.1:3000",
-        ],
+        allow_origins=allowed_origins,
         allow_credentials=True,
-        allow_origin_regex=(
-            r"^https?://(localhost|127\.0\.0\.1" r"|192\.168\.\d+\.\d+)(:\d+)?$"
-        ),
+        allow_origin_regex=cfg.cors_allow_origin_regex,
         allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
         allow_headers=["Content-Type", "X-User-ID", "Accept"],
     )

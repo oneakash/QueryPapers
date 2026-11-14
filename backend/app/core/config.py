@@ -20,6 +20,18 @@ class Settings(BaseSettings):
     app_name: str = Field(default="LangGraph HITL RAG API")
     environment: str = Field(default="development")
 
+    # CORS
+    cors_allow_origins: str = Field(
+        default="http://localhost:3000,http://127.0.0.1:3000",
+        description=(
+            "Comma-separated list of allowed CORS origins for frontend clients."
+        ),
+    )
+    cors_allow_origin_regex: str = Field(
+        default=r"^https?://(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+)(:\d+)?$",
+        description="Optional regex for dynamic local network origins.",
+    )
+
     # Required Database & Vector Store URLs
     postgres_dsn: str = Field(
         default="postgresql://rag_user:rag_password@localhost:5432/rag_db",
@@ -28,6 +40,10 @@ class Settings(BaseSettings):
     qdrant_url: str = Field(
         default="http://localhost:6333",
         description="Qdrant HTTP endpoint URL.",
+    )
+    qdrant_api_key: str | None = Field(
+        default=None,
+        description="API key for a secured or cloud Qdrant instance.",
     )
     qdrant_collection: str = Field(
         default="tenant_documents",

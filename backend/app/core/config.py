@@ -27,10 +27,6 @@ class Settings(BaseSettings):
             "Comma-separated list of allowed CORS origins for frontend clients."
         ),
     )
-    cors_allow_origin_regex: str = Field(
-        default=r"^https?://(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+)(:\d+)?$",
-        description="Optional regex for dynamic local network origins.",
-    )
 
     # Required Database & Vector Store URLs
     postgres_dsn: str = Field(

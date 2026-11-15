@@ -21,6 +21,11 @@ export interface Citation {
   score: number;
 }
 
+export interface ChatResponseMetadata {
+  used_tool?: string | null;
+  tool_output?: string | null;
+}
+
 export interface ChatResponse {
   thread_id: string;
   status: ThreadStatus;
@@ -29,6 +34,7 @@ export interface ChatResponse {
   top_retrieval_score: number;
   citations?: Citation[];
   interrupt_payload: InterruptPreview | null;
+  metadata?: ChatResponseMetadata;
 }
 
 export interface ResumeRequest {

@@ -9,6 +9,7 @@ import {
   ChevronUp,
   FileText,
   Sparkles,
+  Search,
 } from "lucide-react";
 
 function SourceCard({ cite }: { cite: Citation }) {
@@ -83,6 +84,17 @@ export function MessageBubble({
             : "border border-white/10 bg-slate-900/60 backdrop-blur-md text-slate-100 rounded-tl-sm"
         }`}
       >
+        {!isUser && message.metadata?.used_tool && (
+          <div className="mb-3 flex items-center gap-1.5 rounded-lg bg-blue-500/10 px-2.5 py-1 text-xs font-medium text-blue-300 border border-blue-500/20 w-fit">
+            <Search className="h-3.5 w-3.5" />
+            <span>
+              Searched academic papers via{" "}
+              <code className="bg-blue-500/20 px-1 rounded text-blue-200">
+                {message.metadata.used_tool}
+              </code>
+            </span>
+          </div>
+        )}
         {isUser ? (
           <p className="whitespace-pre-wrap">{message.content}</p>
         ) : (

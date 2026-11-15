@@ -9,6 +9,8 @@ import {
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL || "https://querypapers-backend.onrender.com";
 
+const STREAM_TIMEOUT_MS = 120_000;
+
 export async function uploadDocument(
   userId: string,
   file: File
@@ -60,57 +62,72 @@ export async function streamChatMessage(
     onError: (errorMessage: string) => void;
   }
 ): Promise<void> {
-  const response = await fetch(`${API_BASE_URL}/chat`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "text/event-stream",
-      "X-User-ID": userId,
-    },
-    body: JSON.stringify({ ...payload, stream: true }),
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), STREAM_TIMEOUT_MS);
 
-  if (!response.ok || !response.body) {
-    const err = await response.json().catch(() => ({ detail: response.statusText }));
-    throw new Error(err.detail || `Chat failed (${response.status})`);
-  }
+  try {
+    const response = await fetch(`${API_BASE_URL}/chat`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "text/event-stream",
+        "X-User-ID": userId,
+      },
+      body: JSON.stringify({ ...payload, stream: true }),
+      signal: controller.signal,
+    });
 
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder("utf-8");
-  let buffer = "";
+    if (!response.ok || !response.body) {
+      const err = await response.json().catch(() => ({ detail: response.statusText }));
+      throw new Error(err.detail || `Chat failed (${response.status})`);
+    }
 
-  while (true) {
-    const { value, done } = await reader.read();
-    if (done) break;
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder("utf-8");
+    let buffer = "";
 
-    buffer += decoder.decode(value, { stream: true });
-    const rawEvents = buffer.split("\n\n");
-    buffer = rawEvents.pop() || "";
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
 
-    for (const rawBlock of rawEvents) {
-      if (!rawBlock.trim()) continue;
-      let eventType = "message";
-      let dataLines: string[] = [];
+      buffer += decoder.decode(value, { stream: true });
+      const rawEvents = buffer.split("\n\n");
+      buffer = rawEvents.pop() || "";
 
-      for (const line of rawBlock.split("\n")) {
-        if (line.startsWith("event:")) {
-          eventType = line.slice(6).trim();
-        } else if (line.startsWith("data:")) {
-          dataLines.push(line.slice(5).trim());
+      for (const rawBlock of rawEvents) {
+        if (!rawBlock.trim()) continue;
+        let eventType = "message";
+        let dataLines: string[] = [];
+
+        for (const line of rawBlock.split("\n")) {
+          if (line.startsWith("event:")) {
+            eventType = line.slice(6).trim();
+          } else if (line.startsWith("data:")) {
+            dataLines.push(line.slice(5).trim());
+          }
+        }
+
+        const rawData = dataLines.join("\n");
+        if (!rawData) continue;
+
+        if (eventType === "step" && callbacks.onStep) {
+          callbacks.onStep(JSON.parse(rawData) as SSEStepEvent);
+        } else if (eventType === "complete") {
+          callbacks.onComplete(JSON.parse(rawData) as ChatResponse);
+        } else if (eventType === "error") {
+          const parsedErr = JSON.parse(rawData) as { detail?: string };
+          callbacks.onError(parsedErr.detail || "Streaming error occurred.");
         }
       }
-
-      const rawData = dataLines.join("\n");
-      if (!rawData) continue;
-
-      if (eventType === "step" && callbacks.onStep) {
-        callbacks.onStep(JSON.parse(rawData) as SSEStepEvent);
-      } else if (eventType === "complete") {
-        callbacks.onComplete(JSON.parse(rawData) as ChatResponse);
-      } else if (eventType === "error") {
-        const parsedErr = JSON.parse(rawData) as { detail?: string };
-        callbacks.onError(parsedErr.detail || "Streaming error occurred.");
-      }
     }
-  }
+  } catch (err) {
+    // <-- NEW: Graceful timeout error handling
+    if (err instanceof DOMException && err.name === "AbortError") {
+      callbacks.onError("Request timed out. The research agent is taking longer than expected.");
+    } else {
+      callbacks.onError(err instanceof Error ? err.message : "An unexpected error occurred.");
+    }
+  } finally {
+    clearTimeout(timeoutId);
+  }  
 }

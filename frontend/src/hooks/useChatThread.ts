@@ -4,6 +4,7 @@ import { useCallback, useState, useEffect } from "react";
 import { resumeThread, streamChatMessage } from "@/api/client";
 import {
   ChatResponse,
+  ChatResponseMetadata,
   Citation,
   InterruptPreview,
   ThreadStatus,
@@ -16,6 +17,7 @@ export interface ChatMessage {
   rewrittenQuery?: string | null;
   topScore?: number;
   citations?: Citation[];
+  metadata?: ChatResponseMetadata;
 }
 
 export function useChatThread(initialUserId = "akash_dev") {
@@ -48,6 +50,7 @@ export function useChatThread(initialUserId = "akash_dev") {
           rewrittenQuery: res.rewritten_query,
           topScore: res.top_retrieval_score,
           citations: res.citations ?? [],
+          metadata: res.metadata,
         },
       ]);
     }

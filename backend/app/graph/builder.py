@@ -1,20 +1,30 @@
 """Factory for assembling and compiling the Dependency-Inverted StateGraph."""
-
 from typing import Any
-
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.store.base import BaseStore
 
+from app.core.config import get_settings
 from app.core.interfaces import LLMProtocol, VectorStoreProtocol
 from app.graph.edges import make_grade_and_route_edge
 from app.graph.nodes.generate import make_generate_node
 from app.graph.nodes.hitl_review import make_hitl_review_node
 from app.graph.nodes.retrieve import make_retrieve_node
 from app.graph.nodes.rewrite import make_rewrite_node
+from app.graph.nodes.research_agent import make_research_agent_node  # <-- NEW
 from app.graph.state import AgentState
+from app.services.tool_llm import create_tool_calling_llm  # <-- NEW
 
+def route_research(state: AgentState) -> str:
+    """Conditional edge: route to tools if LLM requested them, else generate."""
+    messages = state.get("messages", [])
+    last_message = messages[-1] if messages else None
+    
+    # <-- SHOWCASE: Checking for LangChain tool_calls
+    if hasattr(last_message, "tool_calls") and last_message.tool_calls:
+        return "research_tools"
+    return "generate"
 
 def build_graph(
     vector_store: VectorStoreProtocol,
@@ -28,31 +38,50 @@ def build_graph(
     """Assemble and compile the HITL RAG StateGraph with injected dependencies."""
     workflow: StateGraph[Any, Any, Any, Any] = StateGraph(AgentState)
 
-    workflow.add_node("contextualize_query", make_rewrite_node(llm=llm))
-    workflow.add_node(
-        "retrieve",
-        make_retrieve_node(vector_store=vector_store, top_k=retrieval_top_k),
-    )
-    workflow.add_node(
-        "human_review",
-        make_hitl_review_node(max_user_rules=max_user_rules),
-    )
-    workflow.add_node(
-        "generate",
-        make_generate_node(llm=llm, max_user_rules=max_user_rules),
-    )
+    # Create LangChain LLM for tool calling (uses same .env as your existing llm)
+    settings = get_settings()
+    tool_llm = create_tool_calling_llm(settings)
+    research_node, research_tool_node = make_research_agent_node(tool_llm)
 
+    # Existing Nodes (UNCHANGED)
+    workflow.add_node("contextualize_query", make_rewrite_node(llm=llm))
+    workflow.add_node("retrieve", make_retrieve_node(vector_store=vector_store, top_k=retrieval_top_k))
+    workflow.add_node("human_review", make_hitl_review_node(max_user_rules=max_user_rules))
+    workflow.add_node("generate", make_generate_node(llm=llm, max_user_rules=max_user_rules))
+    
+    # NEW: Tool Calling Nodes
+    workflow.add_node("research_agent", research_node)
+    workflow.add_node("research_tools", research_tool_node)
+
+    # Existing Edges (UNCHANGED for high-confidence path)
     workflow.add_edge(START, "contextualize_query")
     workflow.add_edge("contextualize_query", "retrieve")
+    
     workflow.add_conditional_edges(
         "retrieve",
         make_grade_and_route_edge(confidence_threshold=confidence_threshold),
         {
             "human_review": "human_review",
+            "generate": "generate",  # High confidence → generate (UNCHANGED)
+        },
+    )
+    
+    # MODIFIED: Low confidence now goes through research_agent first
+    workflow.add_edge("human_review", "research_agent")
+
+    # NEW: Tool Calling Routing Logic
+    workflow.add_conditional_edges(
+        "research_agent",
+        route_research,
+        {
+            "research_tools": "research_tools",
             "generate": "generate",
         },
     )
-    workflow.add_edge("human_review", "generate")
+    
+    # Loop back to agent after tool execution
+    workflow.add_edge("research_tools", "research_agent")
+    
     workflow.add_edge("generate", END)
 
     return workflow.compile(checkpointer=checkpointer, store=store)

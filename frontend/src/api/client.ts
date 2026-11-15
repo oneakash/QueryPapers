@@ -7,25 +7,7 @@ import {
 } from "@/types/api";
 
 const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL || "https://querypapers-backend.onrender.com";
-
-function buildNetworkErrorMessage() {
-  return (
-    `Cannot reach backend at ${API_BASE_URL}. ` +
-    "Check NEXT_PUBLIC_API_URL, backend health (/health), and CORS settings."
-  );
-}
-
-async function fetchWithNetworkHint(
-  input: string,
-  init: RequestInit
-): Promise<Response> {
-  try {
-    return await fetch(input, init);
-  } catch {
-    throw new Error(buildNetworkErrorMessage());
-  }
-}
+  process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 export async function uploadDocument(
   userId: string,
@@ -34,7 +16,7 @@ export async function uploadDocument(
   const formData = new FormData();
   formData.append("file", file);
 
-  const response = await fetchWithNetworkHint(`${API_BASE_URL}/upload`, {
+  const response = await fetch(`${API_BASE_URL}/upload`, {
     method: "POST",
     headers: {
       "X-User-ID": userId,
@@ -53,7 +35,7 @@ export async function resumeThread(
   userId: string,
   payload: ResumeRequest
 ): Promise<ChatResponse> {
-  const response = await fetchWithNetworkHint(`${API_BASE_URL}/resume`, {
+  const response = await fetch(`${API_BASE_URL}/resume`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -78,7 +60,7 @@ export async function streamChatMessage(
     onError: (errorMessage: string) => void;
   }
 ): Promise<void> {
-  const response = await fetchWithNetworkHint(`${API_BASE_URL}/chat`, {
+  const response = await fetch(`${API_BASE_URL}/chat`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

@@ -1,35 +1,40 @@
 from typing import Any
+
 from langchain_core.messages import HumanMessage
-from langgraph.prebuilt import ToolNode
 from langchain_openai import ChatOpenAI
+from langgraph.prebuilt import ToolNode
+
 from app.graph.state import AgentState
 from app.graph.tools.arxiv_tool import search_arxiv
 
+
 def make_research_agent_node(llm: ChatOpenAI):
-    """Factory for the research agent node (mirrors your make_generate_node pattern)."""
-    llm_with_tools = llm.bind_tools([search_arxiv])  # <-- SHOWCASE: bind_tools
-    tool_node = ToolNode([search_arxiv])              # <-- SHOWCASE: ToolNode
-    
+    """Factory for the research agent node with deterministic fallback."""
+    llm_with_tools = llm.bind_tools([search_arxiv])
+    tool_node = ToolNode([search_arxiv])
+
     async def research_agent(state: AgentState) -> dict[str, Any]:
-        """Decide whether to call ArXiv tool or pass through to generate."""
-        # If HITL rejected, skip tool calling and let generate handle fallback
+        # Reviewer rejected context -> skip tools, let generate use fallback
         if state.get("hitl_approved") is False:
             return {"messages": []}
-        
-        messages = list(state.get("messages", []))
+
         query = state.get("rewritten_query") or state["original_query"]
-        
-        # Prepare prompt for tool-calling decision
+        messages = list(state.get("messages", []))
         tool_prompt = (
             f"You are a research assistant. The user asked: '{query}'. "
-            f"If the local documents are insufficient, use the search_arxiv tool. "
-            f"Otherwise, respond directly."
+            f"If the local documents are insufficient, use the search_arxiv "
+            f"tool. Otherwise, respond directly without calling any tool."
         )
-        
-        if not messages or messages[-1].type != "human":
-            messages.append(HumanMessage(content=tool_prompt))
-        
-        response = await llm_with_tools.ainvoke(messages)
+
+        try:
+            response = await llm_with_tools.ainvoke(
+                messages + [HumanMessage(content=tool_prompt)]
+            )
+        except Exception:
+            # Deterministic fallback: never crash the graph.
+            # route_research will see no tool_calls -> goes to generate.
+            return {"messages": []}
+
         return {"messages": [response]}
-    
+
     return research_agent, tool_node

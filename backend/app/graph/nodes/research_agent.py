@@ -1,6 +1,6 @@
 from typing import Any
 from langchain_core.messages import HumanMessage
-from langchain_core.tools import ToolNode
+from langgraph.prebuilt import ToolNode
 from langchain_openai import ChatOpenAI
 from app.graph.state import AgentState
 from app.graph.tools.arxiv_tool import search_arxiv

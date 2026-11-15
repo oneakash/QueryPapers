@@ -52,19 +52,16 @@ def build_graph(
     workflow.add_edge(START, "contextualize_query")
     workflow.add_edge("contextualize_query", "retrieve")
     
-    # <-- KEY CHANGE: Route low confidence to research_agent automatically
     workflow.add_conditional_edges(
         "retrieve",
         make_grade_and_route_edge(confidence_threshold=confidence_threshold),
         {
             "generate": "generate",
-            "human_review": "research_agent", 
+            "human_review": "human_review",  # <--- CHANGE THIS: Route to the actual HITL node
         },
     )
-    
-    # Keep manual human review path intact if they explicitly approve
-    workflow.add_edge("human_review", "research_agent")
 
+    workflow.add_edge("human_review", "research_agent") 
     # Tool calling routing
     workflow.add_conditional_edges(
         "research_agent",

@@ -20,6 +20,13 @@ class Settings(BaseSettings):
     app_name: str = Field(default="LangGraph HITL RAG API")
     environment: str = Field(default="development")
 
+    cors_allow_origins: str = Field(
+        default="http://localhost:3000,http://127.0.0.1:3000",
+        description=(
+            "Comma-separated list of allowed CORS origins for frontend clients."
+        ),
+    )
+
     # Required Database & Vector Store URLs
     postgres_dsn: str = Field(
         default="postgresql://rag_user:rag_password@localhost:5432/rag_db",

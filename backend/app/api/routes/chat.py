@@ -1,6 +1,5 @@
 """Chat and HITL resume endpoints supporting both standard JSON and SSE streams."""
 
-import asyncio
 import json
 import re
 from collections.abc import AsyncGenerator
@@ -19,11 +18,10 @@ from app.api.schemas import (
     InterruptPreview,
     ResumeRequest,
 )
-from app.core.interfaces import ScoredChunk, Source
+from app.core.interfaces import ScoredChunk
 
 router = APIRouter(tags=["chat"])
 
-# Fixed: removed accidental double backslashes (\\s* -> \s*)
 _CITATION_PATTERN = re.compile(r"\[(\d+(?:\s*,\s*\d+)*)\]")
 
 
@@ -59,18 +57,6 @@ def _build_citations(
             )
         )
     return citations
-
-
-def _source_to_citation(source: Source) -> Citation:
-    """Convert a Source to a Citation for the API response."""
-    return Citation(
-        index=source.index,
-        doc_id=source.doc_id,
-        filename=source.filename or source.doc_id,
-        chunk_index=source.chunk_index,
-        content=source.content,
-        score=round(float(source.score), 4) if source.score is not None else 0.0,
-    )
 
 
 def _format_chat_response(
@@ -112,12 +98,7 @@ def _format_chat_response(
         )
         answer = None
 
-    # Build citations from state sources if available, otherwise from chunks
-    sources = state_values.get("sources", [])
-    if sources and not is_paused:
-        citations = [_source_to_citation(s) for s in sources]
-    else:
-        citations = [] if is_paused else _build_citations(answer, retrieved_chunks)
+    citations = [] if is_paused else _build_citations(answer, retrieved_chunks)
 
     return ChatResponse(
         thread_id=thread_id,
@@ -166,37 +147,17 @@ async def chat_endpoint(
     }
 
     async def _sse_generator() -> AsyncGenerator[str, None]:
-        # 1. Instruct client to auto-reconnect after 2s if stream drops
-        yield "retry: 2000\n\n"
-        
         async with lock_manager.try_lock(payload.thread_id) as acquired:
             if not acquired:
                 err = json.dumps({"detail": "Thread is locked by another request."})
                 yield f"event: error\ndata: {err}\n\n"
                 return
-            
-            # 2. Initial ping to keep the connection alive immediately
-            yield ": ping\n\n"
-            
             try:
-                # 3. Use explicit async iterator to apply per-step timeouts
-                aiter = graph.astream(
+                async for event in graph.astream(
                     graph_input,
                     config,
                     stream_mode="updates",
-                ).__aiter__()
-                
-                while True:
-                    try:
-                        # Timeout each step to prevent silent hangs and QUIC drops
-                        event = await asyncio.wait_for(aiter.__anext__(), timeout=15.0)
-                    except asyncio.TimeoutError:
-                        # Send a comment ping to keep the SSE connection alive
-                        yield ": ping\n\n"
-                        continue
-                    except StopAsyncIteration:
-                        break
-                        
+                ):
                     node_name = next(iter(event.keys()), "step")
                     step_payload = json.dumps(
                         {"node": node_name, "update": event[node_name]},
@@ -212,9 +173,7 @@ async def chat_endpoint(
                 )
                 yield f"event: complete\ndata: {final_resp.model_dump_json()}\n\n"
             except Exception as exc:
-                # 4. Fallback to exception class name if message is empty (e.g., httpx.ReadTimeout)
-                detail = str(exc) or f"{type(exc).__name__} occurred. Check backend logs for details."
-                err_payload = json.dumps({"detail": detail})
+                err_payload = json.dumps({"detail": str(exc)})
                 yield f"event: error\ndata: {err_payload}\n\n"
 
     if payload.stream:

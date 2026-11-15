@@ -2,8 +2,7 @@
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import datetime
-from typing import Literal, Protocol, runtime_checkable
+from typing import Protocol, runtime_checkable
 
 from langchain_core.messages import BaseMessage
 
@@ -19,7 +18,6 @@ class ScoredChunk:
     score: float
     filename: str = ""
     chunk_index: int = 0
-    content_hash: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -30,21 +28,6 @@ class StoredDocument:
     filename: str
     content_hash: str
     chunk_count: int
-
-
-@dataclass(frozen=True, slots=True)
-class Source:
-    """Generic source reference for citations, supporting document and web sources."""
-
-    kind: Literal["document", "web"]
-    index: int
-    title: str
-    url: str | None = None
-    doc_id: str = ""
-    filename: str = ""
-    chunk_index: int = 0
-    content: str = ""
-    score: float | None = None
 
 
 @runtime_checkable

@@ -8,7 +8,6 @@ from langchain_core.messages import AIMessage
 from langgraph.store.base import BaseStore
 
 from app.core.interfaces import LLMProtocol, ScoredChunk
-from app.core.logging import extract_generate_fields, log_node_timing
 from app.graph.state import AgentState
 
 EMPTY_RETRIEVAL_FALLBACK = (
@@ -18,6 +17,7 @@ EMPTY_RETRIEVAL_FALLBACK = (
 REJECTED_BY_REVIEWER_FALLBACK = (
     "The retrieved context was rejected during human review."
 )
+
 
 def sanitize_chunk_for_xml(chunk: ScoredChunk, index: int = 1) -> ScoredChunk:
     """Escape XML/HTML brackets in chunk content and attach 1-based citation index."""
@@ -31,13 +31,13 @@ def sanitize_chunk_for_xml(chunk: ScoredChunk, index: int = 1) -> ScoredChunk:
         </context>""",
     )
 
+
 def make_generate_node(
     llm: LLMProtocol,
     max_user_rules: int = 10,
 ) -> Any:
     """Create the generate node bound to LLMProtocol and optional BaseStore."""
 
-    @log_node_timing("generate", extract_fields=extract_generate_fields)
     async def generate(
         state: AgentState,
         *,
@@ -49,7 +49,8 @@ def make_generate_node(
         # 1. Zero-chunk short-circuit: never call generation LLM
         if not chunks:
             return {
-                "draft": EMPTY_RETRIEVAL_FALLBACK,
+                "answer": EMPTY_RETRIEVAL_FALLBACK,
+                "messages": [AIMessage(content=EMPTY_RETRIEVAL_FALLBACK)],
             }
 
         # 2. Human reviewer rejected the low-confidence retrieval
@@ -61,7 +62,8 @@ def make_generate_node(
                 else REJECTED_BY_REVIEWER_FALLBACK
             )
             return {
-                "draft": msg,
+                "answer": msg,
+                "messages": [AIMessage(content=msg)],
             }
 
         # 3. Sanitize chunks against XML prompt injection & number them [1], [2]...
@@ -71,24 +73,15 @@ def make_generate_node(
         ]
 
         # 4. Load bounded tenant rules from Long-Term Memory Store
-        #    Sort by created_at to ensure stable ordering across stores
         user_rules: list[str] = []
         if store is not None:
             namespace = ("user_rules", state["user_id"])
-            items = await store.asearch(namespace, limit=max_user_rules + 5)
-            # Extract rules with their timestamps and sort by created_at (oldest first)
-            items_with_ts = []
-            for item in items:
-                if isinstance(item.value, dict) and "rule" in item.value:
-                    items_with_ts.append(
-                        {
-                            "rule": str(item.value["rule"]),
-                            "created_at": item.value.get("created_at", 0),
-                        }
-                    )
-            # Sort by created_at for stable ordering
-            items_with_ts.sort(key=lambda x: x["created_at"])
-            user_rules = [item["rule"] for item in items_with_ts[:max_user_rules]]
+            items = await store.asearch(namespace, limit=max_user_rules)
+            user_rules = [
+                str(item.value["rule"])
+                for item in items
+                if isinstance(item.value, dict) and "rule" in item.value
+            ]
 
         feedback = state.get("hitl_feedback")
         if feedback and feedback not in user_rules:
@@ -101,7 +94,8 @@ def make_generate_node(
             user_rules=user_rules,
         )
         return {
-            "draft": answer,
+            "answer": answer,
+            "messages": [AIMessage(content=answer)],
         }
 
     return generate

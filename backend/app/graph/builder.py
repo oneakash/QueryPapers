@@ -9,10 +9,8 @@ from langgraph.store.base import BaseStore
 
 from app.core.interfaces import LLMProtocol, VectorStoreProtocol
 from app.graph.edges import make_grade_and_route_edge
-from app.graph.nodes.finalize import make_finalize_node
 from app.graph.nodes.generate import make_generate_node
 from app.graph.nodes.hitl_review import make_hitl_review_node
-from app.graph.nodes.reset import make_reset_node
 from app.graph.nodes.retrieve import make_retrieve_node
 from app.graph.nodes.rewrite import make_rewrite_node
 from app.graph.state import AgentState
@@ -30,7 +28,6 @@ def build_graph(
     """Assemble and compile the HITL RAG StateGraph with injected dependencies."""
     workflow: StateGraph[Any, Any, Any, Any] = StateGraph(AgentState)
 
-    workflow.add_node("reset", make_reset_node())
     workflow.add_node("contextualize_query", make_rewrite_node(llm=llm))
     workflow.add_node(
         "retrieve",
@@ -44,13 +41,8 @@ def build_graph(
         "generate",
         make_generate_node(llm=llm, max_user_rules=max_user_rules),
     )
-    workflow.add_node(
-        "finalize",
-        make_finalize_node(),
-    )
 
-    workflow.add_edge(START, "reset")
-    workflow.add_edge("reset", "contextualize_query")
+    workflow.add_edge(START, "contextualize_query")
     workflow.add_edge("contextualize_query", "retrieve")
     workflow.add_conditional_edges(
         "retrieve",
@@ -61,7 +53,6 @@ def build_graph(
         },
     )
     workflow.add_edge("human_review", "generate")
-    workflow.add_edge("generate", "finalize")
-    workflow.add_edge("finalize", END)
+    workflow.add_edge("generate", END)
 
     return workflow.compile(checkpointer=checkpointer, store=store)

@@ -36,6 +36,10 @@ class Settings(BaseSettings):
         default="http://localhost:6333",
         description="Qdrant HTTP endpoint URL.",
     )
+    qdrant_api_key: str | None = Field(
+        default=None,
+        description="API key for a secured or cloud Qdrant instance.",
+    )
     qdrant_collection: str = Field(
         default="tenant_documents",
         description="Base Qdrant collection name for document chunks.",

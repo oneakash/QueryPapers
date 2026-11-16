@@ -2,6 +2,12 @@
 
 A production-grade, stateful Human-in-the-Loop (HITL) Retrieval-Augmented Generation (RAG) system built with **FastAPI**, **LangGraph**, **Qdrant**, and **PostgreSQL**.
 
+## 🌐 Live Demo
+
+<https://querypaperspro.vercel.app/>
+
+**Try QueryPapers live:** Upload your documents, ask questions, and explore the Human-in-the-Loop RAG workflow.
+
 This system is designed around SOLID principles, featuring strict tenant isolation, asynchronous document ingestion, deterministic fallback mechanisms, distributed locking, and seamless multi-provider LLM support (Google Gemini, OpenAI, Groq, Ollama).
 
 ## 🚀 Key Features

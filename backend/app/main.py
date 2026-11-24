@@ -14,7 +14,6 @@ from langgraph.store.postgres.aio import AsyncPostgresStore
 from psycopg_pool import AsyncConnectionPool
 from qdrant_client import AsyncQdrantClient
 from qdrant_client.http import models as rest
-from psycopg.rows import dict_row
 
 from app.api.dependencies import (
     InMemoryThreadLockManager,
@@ -103,67 +102,61 @@ def create_app(
             collection_name=cfg.qdrant_collection,
         )
 
-        # 1. Create a single shared pool with LangGraph-required kwargs
         pool = AsyncConnectionPool(
             conninfo=cfg.postgres_dsn,
             min_size=1,
             max_size=10,
-            kwargs={
-                "autocommit": True,
-                "row_factory": dict_row,
-            },
             open=False,
         )
         await pool.open()
 
-        # 2. Pass the pool directly to the saver and store (NO async with block)
-        checkpointer = AsyncPostgresSaver(pool)
-        ltm_store = AsyncPostgresStore(pool)
-        
-        await checkpointer.setup()
-        await ltm_store.setup()
+        async with (
+            AsyncPostgresSaver.from_conn_string(cfg.postgres_dsn) as checkpointer,
+            AsyncPostgresStore.from_conn_string(cfg.postgres_dsn) as ltm_store,
+        ):
+            await checkpointer.setup()
+            await ltm_store.setup()
 
-        app.state.vector_store = live_vector_store
-        app.state.lock_manager = PostgresAdvisoryLockManager(pool)
-        app.state.rag_graph = build_graph(
-            vector_store=live_vector_store,
-            llm=llm_client,
-            checkpointer=checkpointer,
-            store=ltm_store,
-            confidence_threshold=cfg.hitl_confidence_threshold,
-            retrieval_top_k=cfg.retrieval_top_k,
-            max_user_rules=cfg.max_user_rules,
-        )
+            app.state.vector_store = live_vector_store
+            app.state.lock_manager = PostgresAdvisoryLockManager(pool)
+            app.state.rag_graph = build_graph(
+                vector_store=live_vector_store,
+                llm=llm_client,
+                checkpointer=checkpointer,
+                store=ltm_store,
+                confidence_threshold=cfg.hitl_confidence_threshold,
+                retrieval_top_k=cfg.retrieval_top_k,
+                max_user_rules=cfg.max_user_rules,
+            )
 
-        async def _live_health_probe() -> tuple[bool, bool]:
-            pg_ok = False
-            qdrant_ok = False
-            try:
-                async with pool.connection() as conn:
-                    await conn.execute("SELECT 1")
-                pg_ok = True
-            except Exception:
+            async def _live_health_probe() -> tuple[bool, bool]:
                 pg_ok = False
-
-            try:
-                await qdrant_client.get_collections()
-                qdrant_ok = True
-            except Exception:
                 qdrant_ok = False
+                try:
+                    async with pool.connection() as conn:
+                        await conn.execute("SELECT 1")
+                    pg_ok = True
+                except Exception:
+                    pg_ok = False
 
-            return pg_ok, qdrant_ok
+                try:
+                    await qdrant_client.get_collections()
+                    qdrant_ok = True
+                except Exception:
+                    qdrant_ok = False
 
-        app.state.health_probe = _live_health_probe
-        try:
-            yield
-        finally:
-            # 3. The single pool is cleanly closed here on app shutdown
-            await pool.close()
-            await qdrant_client.close()
-            if hasattr(llm_client, "close"):
-                await llm_client.close()
-            if hasattr(embed_client, "close"):
-                await embed_client.close()
+                return pg_ok, qdrant_ok
+
+            app.state.health_probe = _live_health_probe
+            try:
+                yield
+            finally:
+                await pool.close()
+                await qdrant_client.close()
+                if hasattr(llm_client, "close"):
+                    await llm_client.close()
+                if hasattr(embed_client, "close"):
+                    await embed_client.close()
 
     app = FastAPI(title=cfg.app_name, lifespan=lifespan)
     
